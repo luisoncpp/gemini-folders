@@ -1,0 +1,24 @@
+
+{
+  "manifest_version": 3,
+  "name": "Gemini Projects",
+  "version": "1.0",
+  "description": "Group Gemini chats into local Projects and manage a Prompt Library locally.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://gemini.google.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://gemini.google.com/*"],
+      "css": ["src/styles.css"],
+      "js": ["src/content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "action": {
+    "default_title": "Gemini Projects is active on gemini.google.com"
+  }
+}
