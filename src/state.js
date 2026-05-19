@@ -1,5 +1,5 @@
 export const STATE = { projects: [], chatMap: {}, prompts: [], isCollapsed: false };
-export const ICONS = ['📁', '💻', '📱', '🎓', '📝', '✏️', '</>', '>_', '🎵', '🎬', '🗺️', '🎨'];
+export const ICONS = ['📁', '💻', '📱', '🎓', '📝', '✏️', '</>', '>_', '🎵', '🎬', '🗺️', '🎨', '🗑️'];
 
 let extChrome = null;
 

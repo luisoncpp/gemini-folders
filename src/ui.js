@@ -75,11 +75,15 @@ export function renderSidebarDOM() {
         const isProjCollapsed = p.isCollapsed || false;
         html += `
             <div class="gp-project-item gp-proj-link" data-id="${p.id}" style="justify-content: space-between;">
-                <div style="display:flex; align-items:center;">
+                <div style="display:flex; align-items:center; flex-grow:1; overflow:hidden;">
                     <span class="gp-project-icon">${p.icon}</span> 
-                    <span>${p.name}</span>
+                    <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${p.name}</span>
                 </div>
-                <span style="font-size:10px; opacity:0.6; transform: ${isProjCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)'}; transition: transform 0.2s;">▼</span>
+                <div style="display:flex; align-items:center; gap: 4px;">
+                    <button class="gp-edit-project-btn" data-id="${p.id}" title="Edit Project" style="background:none; border:none; color:var(--gp-text-secondary); cursor:pointer; padding:2px; font-size:12px; opacity:0.5;">✏️</button>
+                    <button class="gp-delete-project-btn" data-id="${p.id}" title="Delete Project" style="background:none; border:none; color:var(--gp-text-secondary); cursor:pointer; padding:2px; font-size:12px; opacity:0.5;">🗑️</button>
+                    <span style="font-size:10px; opacity:0.6; transform: ${isProjCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)'}; transition: transform 0.2s; padding-left: 4px;">▼</span>
+                </div>
             </div>
         `;
         
@@ -136,6 +140,31 @@ export function renderSidebarDOM() {
                 await saveState();
                 renderSidebarDOM();
             }
+        });
+    });
+
+    container.querySelectorAll('.gp-edit-project-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openEditProjectModal(e.currentTarget.dataset.id);
+        });
+    });
+
+    container.querySelectorAll('.gp-delete-project-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const id = e.currentTarget.dataset.id;
+            if (!window.confirm('Are you sure you want to delete this project? Its chats will be unassigned.')) {
+                return;
+            }
+            STATE.projects = STATE.projects.filter(p => p.id !== id);
+            for (let chatId in STATE.chatMap) {
+                if (STATE.chatMap[chatId].projectId === id) {
+                    delete STATE.chatMap[chatId];
+                }
+            }
+            await saveState();
+            renderSidebarDOM();
         });
     });
 
@@ -224,6 +253,56 @@ export function openNewProjectModal(chatDataToMove = null) {
                 };
             }
             
+            await saveState();
+            renderSidebarDOM(); 
+            overlay.remove();
+        }
+    });
+}
+
+export function openEditProjectModal(projectId) {
+    if (document.querySelector('.gp-modal-overlay')) return;
+    const proj = STATE.projects.find(p => p.id === projectId);
+    if (!proj) return;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'gp-modal-overlay';
+    
+    let iconsHtml = ICONS.map((icon, i) => 
+        `<div class="gp-icon-btn ${icon === proj.icon ? 'selected' : ''}" data-icon="${icon}">${icon}</div>`
+    ).join('');
+
+    overlay.innerHTML = `
+        <div class="gp-modal-content">
+            <button class="gp-modal-close">×</button>
+            <h3 class="gp-modal-title">Edit Project</h3>
+            <input type="text" id="gp-proj-name" class="gp-input" value="${proj.name}" autofocus>
+            <div class="gp-icon-grid">
+                ${iconsHtml}
+            </div>
+            <button class="gp-btn-primary" id="gp-save-project">Save Changes</button>
+            <div style="clear:both;"></div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    let selectedIcon = proj.icon;
+    overlay.querySelectorAll('.gp-icon-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            overlay.querySelectorAll('.gp-icon-btn').forEach(b => b.classList.remove('selected'));
+            e.currentTarget.classList.add('selected');
+            selectedIcon = e.currentTarget.dataset.icon;
+        });
+    });
+
+    overlay.querySelector('.gp-modal-close').addEventListener('click', () => overlay.remove());
+
+    overlay.querySelector('#gp-save-project').addEventListener('click', async () => {
+        const name = document.getElementById('gp-proj-name').value.trim();
+        if (name) {
+            proj.name = name;
+            proj.icon = selectedIcon;
             await saveState();
             renderSidebarDOM(); 
             overlay.remove();
