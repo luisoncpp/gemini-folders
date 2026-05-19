@@ -21,8 +21,11 @@ This document provides a concise overview of the architecture, data flows, lifec
 ## 2. Data Control and Flow
 
 - **Single Source of Truth:** The global `STATE` object in `state.js` acts as the source of truth in memory. It contains `projects`, `chatMap` (linking chat IDs to projects), and UI states like `isCollapsed`.
-- **Persistence Flow:** 
-  `UI Event -> Update STATE object -> saveState() (chrome.storage.local) -> renderSidebarDOM()`.
+- **Persistence Flow:** `UI Event -> Update STATE object -> saveState() (chrome.storage.local) -> renderSidebarDOM()`.
+- **Persistence Flow (File Sync):** The extension supports cloud syncing via the local file system (Google Drive Desktop).
+  `UI Event -> Update STATE object -> saveState() -> Write to FileSystemFileHandle -> (Google Drive Syncs to Cloud)`.
+  - **IndexedDB Bridge:** Because `chrome.storage` cannot store file handles, the `FileSystemFileHandle` is persisted across sessions using IndexedDB.
+  - **Migration:** When a user initializes File Sync, `exportLocalData()` reads existing `chrome.storage.local` state and downloads a `gemini_projects_local_backup.json` blob before establishing the new file handle to prevent data loss.
 - **Ephemeral State:** `ChatState.lastClickedChat` (in `chatCapture.js`) temporarily stores information about the chat the user intends to interact with, acting as a bridge between the native DOM and the extension's project mapping logic.
 
 ## 3. Module Responsibilities

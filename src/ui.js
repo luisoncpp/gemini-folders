@@ -1,4 +1,4 @@
-import { STATE, ICONS, saveState } from './state.js';
+import { STATE, ICONS, saveState, createNewSyncFile, openExistingSyncFile, importBackupData } from './state.js';
 
 let sidebarAnchorNode = null;
 
@@ -60,9 +60,16 @@ export function renderSidebarDOM() {
         }
 
     let html = `
-        <div class="gp-sidebar-header" id="gp-sidebar-toggle">
-            <span>Projects</span>
-            <span style="font-size:11px; opacity:0.8; transform: ${STATE.isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)'}; transition: transform 0.2s; display: inline-block;">▼</span>
+        <div class="gp-sidebar-header">
+            <div id="gp-sidebar-toggle" style="display: flex; align-items: center; gap: 8px; flex-grow: 1;">
+                <span>Projects</span>
+                <span style="font-size:11px; opacity:0.8; transform: ${STATE.isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)'}; transition: transform 0.2s; display: inline-block;">▼</span>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <span id="gp-sync-new-btn" title="Create a new sync file in Google Drive" style="cursor:pointer; font-size:16px; opacity:0.8;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">☁️</span>
+                <span id="gp-sync-open-btn" title="Link an existing sync file" style="cursor:pointer; font-size:16px; opacity:0.8;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">🔗</span>
+                <span id="gp-import-btn" title="Import data from a backup JSON" style="cursor:pointer; font-size:16px; opacity:0.8;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">📥</span>
+            </div>
         </div>
         <div class="gp-project-list" style="display: ${STATE.isCollapsed ? 'none' : 'flex'};">
             <div class="gp-project-item" id="gp-new-project-btn">
@@ -117,6 +124,21 @@ export function renderSidebarDOM() {
     });
 
     document.getElementById('gp-new-project-btn')?.addEventListener('click', () => openNewProjectModal());
+    
+    document.getElementById('gp-sync-new-btn')?.addEventListener('click', async () => {
+        await createNewSyncFile();
+        renderSidebarDOM();
+    });
+
+    document.getElementById('gp-sync-open-btn')?.addEventListener('click', async () => {
+        await openExistingSyncFile();
+        renderSidebarDOM();
+    });
+
+    document.getElementById('gp-import-btn')?.addEventListener('click', async () => {
+        await importBackupData();
+        renderSidebarDOM();
+    });
     
     container.querySelectorAll('.gp-chat-item').forEach(link => {
         link.addEventListener('click', (e) => {
