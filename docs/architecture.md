@@ -15,7 +15,7 @@ This document provides a concise overview of the architecture, data flows, lifec
 4. **Runtime Operations:**
    - **User Navigation:** `chatCapture.js` records the last clicked chat details via DOM events.
    - **Context Menu Interaction:** When the user opens a native Gemini menu, `contextMenu.js` detects it and injects a "Move to Project" option.
-   - **Sidebar Interaction:** The custom sidebar handles project creation, editing, deletion, and navigating to mapped chats. Unmapped native chats are hidden from the native list via `hideMappedChats()`.
+   - **Sidebar Interaction:** The custom sidebar handles project creation, editing, deletion, and delegates mapped chat navigation to the equivalent native Gemini chat entry when available. Unmapped native chats are hidden from the native list via `hideMappedChats()`.
    - **State Mutation:** Actions update the global `STATE` object, call `saveState()`, and trigger a re-render of the sidebar UI.
 
 ## 2. Data Control and Flow
@@ -60,5 +60,6 @@ This document provides a concise overview of the architecture, data flows, lifec
   - Resolves the correct native DOM anchor point to inject the custom sidebar.
   - Renders the HTML for the sidebar (`renderSidebarDOM()`).
   - Renders modals for creating and editing projects.
-  - Binds event listeners for all custom UI buttons (edit, delete, remove chat, toggle collapse).
+  - Binds event listeners for custom UI buttons such as edit, delete, remove chat, and toggle collapse.
+  - Intercepts mapped chat clicks and delegates them to the equivalent native Gemini chat link by chat ID, avoiding direct location changes.
   - Actively hides native chat links that have been assigned to a project using `hideMappedChats()`.

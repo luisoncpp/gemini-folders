@@ -2,6 +2,26 @@ import { STATE, ICONS, saveState, createNewSyncFile, openExistingSyncFile, impor
 
 let sidebarAnchorNode = null;
 
+const CHAT_LINK_SELECTOR = 'a[href*="/app/"]';
+const CHAT_ID_PATTERN = /\/app\/([a-zA-Z0-9]+)/;
+
+function findNativeChatLink(chatId) {
+    return Array.from(document.querySelectorAll(`${CHAT_LINK_SELECTOR}:not(.gp-chat-item)`)).find(link => {
+        const href = link.getAttribute('href') || '';
+        const match = href.match(CHAT_ID_PATTERN);
+        return match && match[1] === chatId;
+    }) || null;
+}
+
+function triggerNativeChatNavigation(chatId) {
+    const nativeLink = findNativeChatLink(chatId);
+    if (!nativeLink) {
+        return;
+    }
+
+    nativeLink.click();
+}
+
 export function startSidebarObserver() {
     setInterval(attemptRenderSidebar, 1000);
 }
@@ -100,7 +120,7 @@ export function renderSidebarDOM() {
             projectChats.forEach(([id, data]) => {
                 html += `
                     <div style="display:flex; align-items:center; justify-content:space-between;">
-                        <a href="${data.url}" class="gp-chat-item" title="${data.title}" style="flex-grow:1; overflow:hidden; text-overflow:ellipsis;">
+                        <a href="${data.url}" class="gp-chat-item" data-chat-id="${id}" title="${data.title}" style="flex-grow:1; overflow:hidden; text-overflow:ellipsis;">
                             📄 ${data.title}
                         </a>
                         <button class="gp-remove-chat-btn" data-chat-id="${id}" title="Remove from project" 
@@ -142,14 +162,12 @@ export function renderSidebarDOM() {
     
     container.querySelectorAll('.gp-chat-item').forEach(link => {
         link.addEventListener('click', (e) => {
-            e.preventDefault();
-            const url = e.currentTarget.getAttribute('href');
-            const nativeLink = document.querySelector(`a[href="${url}"]:not(.gp-chat-item)`);
-            if (nativeLink) {
-                nativeLink.click();
-            } else {
-                window.location.href = url;
+            if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+                return;
             }
+
+            e.preventDefault();
+            triggerNativeChatNavigation(e.currentTarget.dataset.chatId);
         });
     });
 
@@ -208,11 +226,11 @@ export function renderSidebarDOM() {
 }
 
 export function hideMappedChats() {
-    const links = document.querySelectorAll('a[href*="/app/"]');
+    const links = document.querySelectorAll(CHAT_LINK_SELECTOR);
     links.forEach(link => {
         if (link.closest('#gp-sidebar-projects')) return;
         
-        const match = link.getAttribute('href').match(/\/app\/([a-zA-Z0-9]+)/);
+        const match = link.getAttribute('href').match(CHAT_ID_PATTERN);
         if (match) {
             const id = match[1];
             const wrapper = link.closest('li') || link.parentElement;
