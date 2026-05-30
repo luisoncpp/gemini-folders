@@ -7,8 +7,13 @@ const CHAT_ID_PATTERN = /\/app\/([a-zA-Z0-9]+)/;
 const CHAT_ACTIONS_MENU_ID = 'gp-chat-actions-menu';
 const MENU_VIEWPORT_PADDING_PX = 8;
 const CHAT_ACTIONS_MENU_OFFSET_PX = 4;
+const PROJECT_DRAG_START_DISTANCE_PX = 6;
+const PROJECT_TOGGLE_SUPPRESSION_MS = 250;
 
 let activeChatMenu = null;
+let activeProjectDragId = null;
+let activeProjectPointerDrag = null;
+let suppressProjectToggleUntil = 0;
 
 document.addEventListener('mousedown', handleDocumentPointerDown);
 document.addEventListener('keydown', handleDocumentKeyDown);
@@ -60,6 +65,150 @@ function handleDocumentKeyDown(event) {
     }
 
     hideChatActionsMenu();
+}
+
+function clearProjectDropIndicators() {
+    document.querySelectorAll('.gp-project-drop-before, .gp-project-drop-after').forEach(projectBlock => {
+        projectBlock.classList.remove('gp-project-drop-before', 'gp-project-drop-after');
+    });
+}
+
+function getProjectLink(projectId) {
+    return document.querySelector(`.gp-proj-link[data-id="${projectId}"]`);
+}
+
+function getProjectInsertAfter(projectBlock, clientY) {
+    const projectRow = projectBlock.querySelector('.gp-proj-link');
+    if (!projectRow) {
+        return false;
+    }
+
+    const rowRect = projectRow.getBoundingClientRect();
+    return clientY >= rowRect.top + (rowRect.height / 2);
+}
+
+function updateProjectDropIndicator(projectBlock, insertAfter) {
+    clearProjectDropIndicators();
+    projectBlock.classList.add(insertAfter ? 'gp-project-drop-after' : 'gp-project-drop-before');
+}
+
+function moveProject(projectId, targetProjectId, insertAfter) {
+    if (projectId === targetProjectId) {
+        return false;
+    }
+
+    const originalOrder = STATE.projects.map(project => project.id).join('|');
+    const sourceIndex = STATE.projects.findIndex(project => project.id === projectId);
+    const targetIndex = STATE.projects.findIndex(project => project.id === targetProjectId);
+    if (sourceIndex === -1 || targetIndex === -1) {
+        return false;
+    }
+
+    const [movedProject] = STATE.projects.splice(sourceIndex, 1);
+    const nextTargetIndex = STATE.projects.findIndex(project => project.id === targetProjectId);
+    const insertionIndex = insertAfter ? nextTargetIndex + 1 : nextTargetIndex;
+    STATE.projects.splice(insertionIndex, 0, movedProject);
+
+    const nextOrder = STATE.projects.map(project => project.id).join('|');
+    return originalOrder !== nextOrder;
+}
+
+function cleanupProjectPointerDrag() {
+    document.removeEventListener('mousemove', handleProjectPointerMove);
+    document.removeEventListener('mouseup', handleProjectPointerUp);
+
+    if (activeProjectDragId) {
+        getProjectLink(activeProjectDragId)?.classList.remove('gp-project-dragging');
+    }
+
+    document.body.style.userSelect = '';
+    activeProjectDragId = null;
+    activeProjectPointerDrag = null;
+    clearProjectDropIndicators();
+}
+
+function handleProjectPointerDown(event) {
+    if (event.button !== 0) {
+        return;
+    }
+
+    if (event.target.closest('button')) {
+        return;
+    }
+
+    const { id } = event.currentTarget.dataset;
+    if (!id) {
+        return;
+    }
+
+    activeProjectPointerDrag = {
+        projectId: id,
+        startX: event.clientX,
+        startY: event.clientY,
+        isDragging: false,
+        dropProjectId: null,
+        dropInsertAfter: false
+    };
+
+    document.addEventListener('mousemove', handleProjectPointerMove);
+    document.addEventListener('mouseup', handleProjectPointerUp);
+}
+
+function handleProjectPointerMove(event) {
+    if (!activeProjectPointerDrag) {
+        return;
+    }
+
+    const deltaX = Math.abs(event.clientX - activeProjectPointerDrag.startX);
+    const deltaY = Math.abs(event.clientY - activeProjectPointerDrag.startY);
+    if (!activeProjectPointerDrag.isDragging) {
+        if (Math.max(deltaX, deltaY) < PROJECT_DRAG_START_DISTANCE_PX) {
+            return;
+        }
+
+        activeProjectPointerDrag.isDragging = true;
+        activeProjectDragId = activeProjectPointerDrag.projectId;
+        getProjectLink(activeProjectDragId)?.classList.add('gp-project-dragging');
+        document.body.style.userSelect = 'none';
+    }
+
+    event.preventDefault();
+
+    const hoveredElement = document.elementFromPoint(event.clientX, event.clientY);
+    const projectBlock = hoveredElement?.closest('.gp-project-block');
+    const targetProjectId = projectBlock?.dataset.projectId || null;
+    if (!projectBlock || !targetProjectId || targetProjectId === activeProjectDragId) {
+        activeProjectPointerDrag.dropProjectId = null;
+        clearProjectDropIndicators();
+        return;
+    }
+
+    const insertAfter = getProjectInsertAfter(projectBlock, event.clientY);
+    activeProjectPointerDrag.dropProjectId = targetProjectId;
+    activeProjectPointerDrag.dropInsertAfter = insertAfter;
+    updateProjectDropIndicator(projectBlock, insertAfter);
+}
+
+async function handleProjectPointerUp() {
+    if (!activeProjectPointerDrag) {
+        return;
+    }
+
+    const dragState = activeProjectPointerDrag;
+    cleanupProjectPointerDrag();
+
+    if (!dragState.isDragging || !dragState.dropProjectId) {
+        return;
+    }
+
+    const didMoveProject = moveProject(dragState.projectId, dragState.dropProjectId, dragState.dropInsertAfter);
+    if (!didMoveProject) {
+        return;
+    }
+
+    suppressProjectToggleUntil = Date.now() + PROJECT_TOGGLE_SUPPRESSION_MS;
+    await saveState();
+    renderSidebarDOM();
 }
 
 function getOrCreateChatActionsMenu() {
@@ -340,17 +489,19 @@ export function renderSidebarDOM() {
     STATE.projects.forEach(p => {
         const isProjCollapsed = p.isCollapsed || false;
         html += `
-            <div class="gp-project-item gp-proj-link" data-id="${p.id}" style="justify-content: space-between;">
-                <div style="display:flex; align-items:center; flex-grow:1; overflow:hidden;">
-                    <span class="gp-project-icon">${p.icon}</span> 
-                    <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${p.name}</span>
+            <div class="gp-project-block" data-project-id="${p.id}">
+                <div class="gp-project-item gp-proj-link" data-id="${p.id}" style="justify-content: space-between;">
+                    <div style="display:flex; align-items:center; flex-grow:1; overflow:hidden;">
+                        <span class="gp-project-drag-handle" title="Drag to reorder">⋮⋮</span>
+                        <span class="gp-project-icon">${p.icon}</span> 
+                        <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${p.name}</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap: 4px;">
+                        <button class="gp-edit-project-btn" data-id="${p.id}" title="Edit Project" style="background:none; border:none; color:var(--gp-text-secondary); cursor:pointer; padding:2px; font-size:12px; opacity:0.5;">✏️</button>
+                        <button class="gp-delete-project-btn" data-id="${p.id}" title="Delete Project" style="background:none; border:none; color:var(--gp-text-secondary); cursor:pointer; padding:2px; font-size:12px; opacity:0.5;">🗑️</button>
+                        <span style="font-size:10px; opacity:0.6; transform: ${isProjCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)'}; transition: transform 0.2s; padding-left: 4px;">▼</span>
+                    </div>
                 </div>
-                <div style="display:flex; align-items:center; gap: 4px;">
-                    <button class="gp-edit-project-btn" data-id="${p.id}" title="Edit Project" style="background:none; border:none; color:var(--gp-text-secondary); cursor:pointer; padding:2px; font-size:12px; opacity:0.5;">✏️</button>
-                    <button class="gp-delete-project-btn" data-id="${p.id}" title="Delete Project" style="background:none; border:none; color:var(--gp-text-secondary); cursor:pointer; padding:2px; font-size:12px; opacity:0.5;">🗑️</button>
-                    <span style="font-size:10px; opacity:0.6; transform: ${isProjCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)'}; transition: transform 0.2s; padding-left: 4px;">▼</span>
-                </div>
-            </div>
         `;
         
         const projectChats = Object.entries(STATE.chatMap).filter(([id, data]) => data.projectId === p.id);
@@ -371,6 +522,8 @@ export function renderSidebarDOM() {
             });
             html += `</div>`;
         }
+
+        html += `</div>`;
     });
 
     html += `</div>`;
@@ -412,6 +565,10 @@ export function renderSidebarDOM() {
 
     container.querySelectorAll('.gp-proj-link').forEach(el => {
         el.addEventListener('click', async (e) => {
+            if (Date.now() < suppressProjectToggleUntil) {
+                return;
+            }
+
             const projId = e.currentTarget.dataset.id;
             const proj = STATE.projects.find(p => p.id === projId);
             if (proj) {
@@ -420,6 +577,8 @@ export function renderSidebarDOM() {
                 renderSidebarDOM();
             }
         });
+
+        el.addEventListener('mousedown', handleProjectPointerDown);
     });
 
     container.querySelectorAll('.gp-edit-project-btn').forEach(btn => {

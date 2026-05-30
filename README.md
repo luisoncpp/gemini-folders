@@ -5,6 +5,7 @@ Thanks to the original authors!
 Current sidebar features include:
 
 - Grouping Gemini conversations into custom projects.
+- Reordering projects with drag and drop directly in the sidebar.
 - Renaming conversations from the project sidebar actions menu.
 - Moving conversations between projects from the same actions menu.
 - Removing conversations from all projects without opening Gemini's native menu.
