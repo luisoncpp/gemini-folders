@@ -25,6 +25,7 @@
         "src/state.js",
         "src/chatCapture.js",
         "src/ui.js",
+        "src/ui/*.js",
         "src/contextMenu.js"
       ],
       "matches": ["https://gemini.google.com/*"]

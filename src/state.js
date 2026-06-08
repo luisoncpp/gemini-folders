@@ -39,15 +39,15 @@ async function restoreFileHandle() {
     }
 }
 
-async function verifyPermission(handle, withActivation = false) {
+async function verifyPermission(handle, withActivation = false, mode = 'readwrite') {
     if (!handle) return false;
     // simulating named parameters using comments
-    if ((await handle.queryPermission({ mode: 'readwrite' /* mode */ })) === 'granted') {
+    if ((await handle.queryPermission({ mode: mode /* mode */ })) === 'granted') {
         return true;
     }
     if (withActivation) {
         try {
-            if ((await handle.requestPermission({ mode: 'readwrite' /* mode */ })) === 'granted') {
+            if ((await handle.requestPermission({ mode: mode /* mode */ })) === 'granted') {
                 return true;
             }
         } catch (e) {
@@ -58,16 +58,14 @@ async function verifyPermission(handle, withActivation = false) {
 }
 
 export async function exportLocalData() {
-    const data = await extChrome.storage.local.get(['projects', 'chatMap', 'prompts', 'isCollapsed']);
-    
-    const hasProjects = data.projects && data.projects.length > 0;
-    const hasChats = data.chatMap && Object.keys(data.chatMap).length > 0;
+    const hasProjects = STATE.projects && STATE.projects.length > 0;
+    const hasChats = STATE.chatMap && Object.keys(STATE.chatMap).length > 0;
 
     if (!hasProjects && !hasChats) {
         return /* exported */ false; 
     }
 
-    const blob = new Blob([JSON.stringify(data, null, JSON_INDENT_SPACES)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(STATE, null, JSON_INDENT_SPACES)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     
     const downloadLink = document.createElement('a');
@@ -86,6 +84,10 @@ export async function exportLocalData() {
 }
 
 export async function createNewSyncFile() {
+    if (!window.showSaveFilePicker) {
+        alert("File System Access API is not supported by your browser or is blocked by your settings (e.g. Brave Shields). Please enable it or use a supported browser.");
+        return;
+    }
     try {
         fileHandle = await window.showSaveFilePicker({
             suggestedName: 'gemini_projects_sync.json',
@@ -104,6 +106,10 @@ export async function createNewSyncFile() {
 }
 
 export async function openExistingSyncFile() {
+    if (!window.showOpenFilePicker) {
+        alert("File System Access API is not supported by your browser or is blocked by your settings (e.g. Brave Shields). Please enable it or use a supported browser.");
+        return;
+    }
     try {
         [fileHandle] = await window.showOpenFilePicker({
             types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }],
@@ -114,9 +120,19 @@ export async function openExistingSyncFile() {
         const tx = db.transaction('handles', 'readwrite');
         tx.objectStore('handles').put(fileHandle, 'syncFile');
         
-        await exportLocalData();
+        let backupSaved = false;
+        const hasProjects = STATE.projects && STATE.projects.length > 0;
+        const hasChats = STATE.chatMap && Object.keys(STATE.chatMap).length > 0;
+        if ((hasProjects || hasChats) && window.confirm("Would you like to save a backup of the current projects before linking the sync file?")) {
+            backupSaved = await exportLocalData();
+        }
+        
         await loadState(true /* isUserAction */); 
-        alert("Sync file linked! Backup saved to downloads.");
+        if (backupSaved) {
+            alert("Sync file linked! Backup saved to downloads.");
+        } else {
+            alert("Sync file linked successfully!");
+        }
     } catch (err) {
         console.error("[Gemini Projects] Error:", err);
     }
@@ -124,12 +140,34 @@ export async function openExistingSyncFile() {
 
 export async function importBackupData() {
     try {
-        const [handle] = await window.showOpenFilePicker({
-            types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }],
-            multiple: false /* multiple */
-        });
-        const file = await handle.getFile();
-        const text = await file.text();
+        let text = '';
+        if (window.showOpenFilePicker) {
+            const [handle] = await window.showOpenFilePicker({
+                types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }],
+                multiple: false /* multiple */
+            });
+            const file = await handle.getFile();
+            text = await file.text();
+        } else {
+            text = await new Promise((resolve, reject) => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.json';
+                input.onchange = (e) => {
+                    const file = e.target.files[0];
+                    if (!file) {
+                        reject(new Error("No file selected"));
+                        return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = () => reject(new Error("Error reading file"));
+                    reader.readAsText(file);
+                };
+                input.click();
+            });
+        }
+        
         const data = JSON.parse(text);
         
         STATE.projects = data.projects || [];
@@ -158,7 +196,7 @@ export async function loadState(isUserAction = false) {
         let loadedFromFile = false;
         
         if (fileHandle) {
-            const hasPermission = await verifyPermission(fileHandle, isUserAction);
+            const hasPermission = await verifyPermission(fileHandle, isUserAction, 'read');
             if (hasPermission) {
                 const file = await fileHandle.getFile();
                 const text = await file.text();
@@ -191,7 +229,7 @@ export async function loadState(isUserAction = false) {
 export async function saveState() {
     const payload = { projects: STATE.projects, chatMap: STATE.chatMap, prompts: STATE.prompts, isCollapsed: STATE.isCollapsed };
     
-    const hasPermission = await verifyPermission(fileHandle, true /* isUserAction */);
+    const hasPermission = await verifyPermission(fileHandle, true /* isUserAction */, 'readwrite');
     if (hasPermission) {
         const writable = await fileHandle.createWritable();
         await writable.write(JSON.stringify(payload, null, JSON_INDENT_SPACES));

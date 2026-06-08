@@ -11,7 +11,7 @@ This document provides a concise overview of the architecture, data flows, lifec
    - Initializes chat capture listeners (`chatCapture.js`).
    - Starts the `MutationObserver` for the native context menu (`contextMenu.js`).
    - Loads persistent state from `chrome.storage.local`.
-   - Starts the observer/interval to inject and render the custom sidebar (`ui.js`).
+   - Starts the observer/interval to inject and render the custom sidebar via the public UI facade (`ui.js`), backed by focused modules under `src/ui/`.
 4. **Runtime Operations:**
    - **User Navigation:** `chatCapture.js` records the last clicked chat details via DOM events.
    - **Context Menu Interaction:** When the user opens a native Gemini menu, `contextMenu.js` detects it and injects a "Move to Project" option.
@@ -25,7 +25,7 @@ This document provides a concise overview of the architecture, data flows, lifec
 - **Persistence Flow (File Sync):** The extension supports cloud syncing via the local file system (Google Drive Desktop).
   `UI Event -> Update STATE object -> saveState() -> Write to FileSystemFileHandle -> (Google Drive Syncs to Cloud)`.
   - **IndexedDB Bridge:** Because `chrome.storage` cannot store file handles, the `FileSystemFileHandle` is persisted across sessions using IndexedDB.
-  - **Migration:** When a user initializes File Sync, `exportLocalData()` reads existing `chrome.storage.local` state and downloads a `gemini_projects_local_backup.json` blob before establishing the new file handle to prevent data loss.
+  - **Migration:** When a user links an existing sync file, they are prompted to save a backup. If accepted, `exportLocalData()` reads existing state and downloads a `gemini_projects_local_backup.json` blob to prevent data loss before loading the new state.
 - **Ephemeral State:** `ChatState.lastClickedChat` (in `chatCapture.js`) temporarily stores information about the chat the user intends to interact with, acting as a bridge between the native DOM and the extension's project mapping logic.
 
 ## 3. Module Responsibilities
@@ -56,11 +56,29 @@ This document provides a concise overview of the architecture, data flows, lifec
 - **Details:** Uses a `MutationObserver` to watch for the creation of Gemini's native popup menus (`div[role="menu"]`). Injects a custom "Move to Project" item. Manages a dynamic submenu displaying the user's created projects.
 
 ### `src/ui.js`
-- **Responsibility:** Custom UI rendering and DOM manipulation.
-- **Details:** 
-  - Resolves the correct native DOM anchor point to inject the custom sidebar.
-  - Renders the HTML for the sidebar (`renderSidebarDOM()`).
-  - Renders modals for creating and editing projects.
-  - Binds event listeners for custom UI buttons such as edit, delete, drag-and-drop reordering, the conversation actions menu, and toggle collapse.
-  - Intercepts mapped chat clicks and delegates them to the equivalent native Gemini chat link by chat ID, avoiding direct location changes.
-  - Actively hides native chat links that have been assigned to a project using `hideMappedChats()`.
+- **Responsibility:** Public UI facade.
+- **Details:** Re-exports the UI entry points used by the rest of the extension so callers do not depend on the internal file layout.
+
+### `src/ui/sidebar.js`
+- **Responsibility:** Sidebar injection, rendering, and event binding.
+- **Details:** Resolves the native DOM anchor point, renders the sidebar HTML, binds sidebar interactions, and coordinates follow-up UI refreshes.
+
+### `src/ui/chatActionsMenu.js`
+- **Responsibility:** Floating conversation actions menu.
+- **Details:** Manages the rename, move, and remove actions for mapped conversations and keeps the floating menu positioned and dismissed correctly.
+
+### `src/ui/projectDrag.js`
+- **Responsibility:** Project drag-and-drop reordering.
+- **Details:** Tracks pointer-driven drag state, updates visual drop indicators, persists project order changes, and suppresses accidental collapse toggles right after a drop.
+
+### `src/ui/projectModals.js`
+- **Responsibility:** Project create/edit modals.
+- **Details:** Renders and wires the modal flows for creating projects, picking icons, and editing existing project metadata.
+
+### `src/ui/chatModals.js`
+- **Responsibility:** Conversation rename modal.
+- **Details:** Handles the rename flow for mapped conversations and persists title updates.
+
+### `src/ui/navigation.js`
+- **Responsibility:** Sidebar-to-native chat navigation helpers.
+- **Details:** Delegates mapped chat clicks to the equivalent native Gemini chat entry when available and hides native chat links that have already been assigned to a project.
