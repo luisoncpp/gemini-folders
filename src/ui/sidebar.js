@@ -7,6 +7,7 @@ import {
 } from '../state.js';
 import {
     CHATS_SECTION_LABELS,
+    CHAT_LINK_SELECTOR,
     SIDEBAR_ANCHOR_SEARCH_DEPTH,
     SIDEBAR_RENDER_INTERVAL_MS
 } from './constants.js';
@@ -194,14 +195,25 @@ function attemptRenderSidebar() {
     let node = null;
     let chatsTextNode = null;
     while ((node = walker.nextNode())) {
-        const text = node.nodeValue.trim();
-        if (CHATS_SECTION_LABELS.includes(text)) {
+        const text = normalizeSidebarLabel(node.nodeValue);
+        if (CHATS_SECTION_LABELS.some(label => text === normalizeSidebarLabel(label))) {
             chatsTextNode = node.parentElement;
             break;
         }
     }
 
     if (!chatsTextNode) {
+        chatsTextNode = findSidebarSectionByElementText();
+    }
+
+    if (!chatsTextNode) {
+        const chatHistoryAnchor = findNativeChatHistoryAnchor();
+        if (!chatHistoryAnchor) {
+            return;
+        }
+
+        sidebarAnchorNode = chatHistoryAnchor;
+        renderSidebarDOM();
         return;
     }
 
@@ -230,6 +242,37 @@ function attemptRenderSidebar() {
     console.log('[Gemini Projects] attemptRenderSidebar: Found container and target block. Injecting...');
     sidebarAnchorNode = targetBlock;
     renderSidebarDOM();
+}
+
+function normalizeSidebarLabel(label) {
+    return label.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+}
+
+function findSidebarSectionByElementText() {
+    const sidebarElements = document.querySelectorAll('nav, aside, [role="navigation"]');
+    for (const sidebar of sidebarElements) {
+        const labelElement = Array.from(sidebar.querySelectorAll('*')).find(element => {
+            const text = normalizeSidebarLabel(element.textContent || '');
+            return CHATS_SECTION_LABELS.some(label => text === normalizeSidebarLabel(label));
+        });
+        if (labelElement) {
+            return labelElement;
+        }
+    }
+
+    return null;
+}
+
+function findNativeChatHistoryAnchor() {
+    const chatLinks = Array.from(document.querySelectorAll(CHAT_LINK_SELECTOR))
+        .filter(link => !link.closest('#gp-sidebar-projects'));
+    const sidebarChatLink = chatLinks.find(link => link.closest('nav, aside, [role="navigation"]'));
+    const firstChatLink = sidebarChatLink || chatLinks[0];
+    if (!firstChatLink) {
+        return null;
+    }
+
+    return firstChatLink.closest('li, [role="listitem"]') || firstChatLink.parentElement;
 }
 
 export function renderSidebarDOM() {

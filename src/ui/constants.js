@@ -6,5 +6,14 @@ export const CHAT_ACTIONS_MENU_OFFSET_PX = 4;
 export const PROJECT_DRAG_START_DISTANCE_PX = 6;
 export const PROJECT_TOGGLE_SUPPRESSION_MS = 250;
 export const SIDEBAR_RENDER_INTERVAL_MS = 1000;
-export const SIDEBAR_ANCHOR_SEARCH_DEPTH = 4;
-export const CHATS_SECTION_LABELS = ['Chats', 'Conversaciones', 'Recent', 'Recientes', 'Conversations'];
+export const SIDEBAR_ANCHOR_SEARCH_DEPTH = 8;
+export const CHATS_SECTION_LABELS = [
+    'Chats',
+    'Conversaciones',
+    'Recent',
+    'Recent chats',
+    'Pinned and recent chats',
+    'Recents',
+    'Recientes',
+    'Conversations'
+];

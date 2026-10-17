@@ -61,7 +61,7 @@ This document provides a concise overview of the architecture, data flows, lifec
 
 ### `src/ui/sidebar.js`
 - **Responsibility:** Sidebar injection, rendering, and event binding.
-- **Details:** Resolves the native DOM anchor point, renders the sidebar HTML, binds sidebar interactions, and coordinates follow-up UI refreshes.
+- **Details:** Resolves the native DOM anchor point using Gemini's chat-history labels (including the current “Recent chats” wording) and semantic navigation containers, then falls back to the first native chat link when headings are hidden or absent. It renders the sidebar HTML, binds sidebar interactions, and coordinates follow-up UI refreshes. The anchor search allows deeper nesting to accommodate Gemini sidebar markup changes.
 
 ### `src/ui/chatActionsMenu.js`
 - **Responsibility:** Floating conversation actions menu.

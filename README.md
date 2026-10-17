@@ -9,3 +9,5 @@ Current sidebar features include:
 - Renaming conversations from the project sidebar actions menu.
 - Moving conversations between projects from the same actions menu.
 - Removing conversations from all projects without opening Gemini's native menu.
+
+The project sidebar is inserted alongside Gemini's chat history. The extension recognizes current and earlier chat-history labels, semantic navigation containers, and falls back to the first native chat entry when Gemini hides or removes the section heading.
